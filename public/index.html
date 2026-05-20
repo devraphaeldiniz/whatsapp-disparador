@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WhatsApp Disparador</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: system-ui, sans-serif; background: #f4f4f5; color: #18181b; }
+  header { background: #25d366; color: #fff; padding: 14px 24px; display: flex; align-items: center; gap: 12px; }
+  header h1 { font-size: 18px; font-weight: 600; }
+  #status-badge { margin-left: auto; font-size: 12px; background: rgba(255,255,255,.25); padding: 4px 10px; border-radius: 20px; }
+  nav { display: flex; gap: 2px; background: #fff; border-bottom: 1px solid #e4e4e7; padding: 0 24px; }
+  nav button { padding: 12px 18px; border: none; background: none; cursor: pointer; font-size: 14px; color: #71717a; border-bottom: 2px solid transparent; }
+  nav button.active { color: #16a34a; border-bottom-color: #16a34a; font-weight: 600; }
+  .page { display: none; padding: 24px; max-width: 960px; margin: 0 auto; }
+  .page.active { display: block; }
+  .card { background: #fff; border: 1px solid #e4e4e7; border-radius: 10px; padding: 20px; margin-bottom: 16px; }
+  .card h2 { font-size: 15px; font-weight: 600; margin-bottom: 14px; color: #27272a; }
+  label { display: block; font-size: 13px; color: #52525b; margin-bottom: 4px; margin-top: 10px; }
+  input, textarea { width: 100%; padding: 8px 10px; border: 1px solid #d4d4d8; border-radius: 6px; font-size: 14px; font-family: inherit; }
+  textarea { resize: vertical; min-height: 80px; }
+  .row { display: flex; gap: 10px; }
+  .row > div { flex: 1; }
+  button.btn { padding: 9px 18px; border: none; border-radius: 6px; font-size: 14px; cursor: pointer; font-weight: 500; }
+  button.btn-primary { background: #16a34a; color: #fff; }
+  button.btn-primary:hover { background: #15803d; }
+  button.btn-danger { background: #ef4444; color: #fff; font-size: 12px; padding: 5px 10px; }
+  button.btn-outline { background: #fff; color: #16a34a; border: 1px solid #16a34a; }
+  button.btn-sm { padding: 5px 12px; font-size: 12px; }
+  .mt { margin-top: 12px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th { text-align: left; padding: 8px 10px; background: #f4f4f5; font-weight: 600; color: #52525b; border-bottom: 1px solid #e4e4e7; }
+  td { padding: 8px 10px; border-bottom: 1px solid #f4f4f5; vertical-align: middle; }
+  tr:last-child td { border-bottom: none; }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 20px; font-size: 11px; font-weight: 600; }
+  .badge-green { background: #dcfce7; color: #166534; }
+  .badge-yellow { background: #fef9c3; color: #854d0e; }
+  .badge-red { background: #fee2e2; color: #991b1b; }
+  .badge-gray { background: #f4f4f5; color: #52525b; }
+  .badge-blue { background: #dbeafe; color: #1e40af; }
+  .empty { text-align: center; color: #a1a1aa; padding: 32px; font-size: 14px; }
+  .etapa-row { display: flex; gap: 8px; align-items: flex-start; margin-bottom: 8px; }
+  .etapa-num { background: #25d366; color: #fff; width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; flex-shrink: 0; margin-top: 8px; }
+  .toast { position: fixed; bottom: 24px; right: 24px; background: #27272a; color: #fff; padding: 12px 18px; border-radius: 8px; font-size: 13px; z-index: 9999; display: none; }
+</style>
+</head>
+<body>
+
+<header>
+  <span>📱</span>
+  <h1>WhatsApp Disparador</h1>
+  <span id="status-badge">Verificando...</span>
+</header>
+
+<nav>
+  <button class="active" onclick="goTo('contatos', this)">Contatos</button>
+  <button onclick="goTo('campanhas', this)">Campanhas</button>
+  <button onclick="goTo('fluxos', this)">Fluxos</button>
+  <button onclick="goTo('fila', this)">Fila</button>
+</nav>
+
+<!-- CONTATOS -->
+<div id="page-contatos" class="page active">
+  <div class="card">
+    <h2>Importar CSV</h2>
+    <p style="font-size:13px;color:#71717a;margin-bottom:10px">O arquivo deve ter colunas <code>nome</code> e <code>telefone</code></p>
+    <input type="file" id="csv-file" accept=".csv">
+    <button class="btn btn-primary mt" onclick="importarCSV()">Importar</button>
+  </div>
+  <div class="card">
+    <h2>Contatos (<span id="total-contatos">0</span>)</h2>
+    <div id="tabela-contatos"><div class="empty">Nenhum contato</div></div>
+  </div>
+</div>
+
+<!-- CAMPANHAS -->
+<div id="page-campanhas" class="page">
+  <div class="card">
+    <h2>Nova Campanha</h2>
+    <label>Nome</label>
+    <input type="text" id="c-nome" placeholder="Ex: Promocao Black Friday">
+    <label>Mensagem</label>
+    <textarea id="c-msg" placeholder="Ola, temos uma oferta especial para voce!"></textarea>
+    <div class="row mt">
+      <div>
+        <label>Delay minimo (segundos)</label>
+        <input type="number" id="c-dmin" value="10" min="1">
+      </div>
+      <div>
+        <label>Delay maximo (segundos)</label>
+        <input type="number" id="c-dmax" value="30" min="1">
+      </div>
+    </div>
+    <button class="btn btn-primary mt" onclick="criarCampanha()">Criar Campanha</button>
+  </div>
+  <div class="card">
+    <h2>Campanhas</h2>
+    <div id="lista-campanhas"><div class="empty">Nenhuma campanha</div></div>
+  </div>
+</div>
+
+<!-- FLUXOS -->
+<div id="page-fluxos" class="page">
+  <div class="card">
+    <h2>Novo Fluxo</h2>
+    <label>Nome do fluxo</label>
+    <input type="text" id="f-nome" placeholder="Ex: Onboarding de clientes">
+    <div id="etapas-container" style="margin-top:12px"></div>
+    <div style="display:flex;gap:8px;margin-top:8px">
+      <button class="btn btn-outline btn-sm" onclick="addEtapa()">+ Etapa</button>
+      <button class="btn btn-primary btn-sm" onclick="criarFluxo()">Criar Fluxo</button>
+    </div>
+  </div>
+  <div class="card">
+    <h2>Fluxos</h2>
+    <div id="lista-fluxos"><div class="empty">Nenhum fluxo</div></div>
+  </div>
+</div>
+
+<!-- FILA -->
+<div id="page-fila" class="page">
+  <div class="card">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+      <h2 style="margin:0">Fila de Envio</h2>
+      <button class="btn btn-outline btn-sm" onclick="carregarFila()">Atualizar</button>
+    </div>
+    <div id="tabela-fila"><div class="empty">Nenhum item</div></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+let etapaCount = 0;
+
+function goTo(page, btn) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
+  document.getElementById('page-' + page).classList.add('active');
+  btn.classList.add('active');
+  if (page === 'contatos') carregarContatos();
+  if (page === 'campanhas') carregarCampanhas();
+  if (page === 'fluxos') { carregarFluxos(); if (!etapaCount) addEtapa(); }
+  if (page === 'fila') carregarFila();
+}
+
+function toast(msg, ok) {
+  const t = document.getElementById('toast');
+  t.textContent = (ok === false ? '❌ ' : '✅ ') + msg;
+  t.style.display = 'block';
+  setTimeout(() => t.style.display = 'none', 3000);
+}
+
+async function api(path, opts) {
+  const res = await fetch('/api' + path, {
+    headers: { 'Content-Type': 'application/json' },
+    ...opts
+  });
+  return res.json();
+}
+
+async function checkStatus() {
+  try {
+    const { status, mock } = await api('/whatsapp/status');
+    const badge = document.getElementById('status-badge');
+    badge.textContent = status + (mock ? ' (mock)' : '');
+    badge.style.background = status === 'connected' ? 'rgba(255,255,255,.3)' : 'rgba(220,38,38,.5)';
+  } catch(e) {}
+}
+checkStatus();
+setInterval(checkStatus, 8000);
+
+// CONTATOS
+async function carregarContatos() {
+  const rows = await api('/contatos');
+  document.getElementById('total-contatos').textContent = rows.length;
+  const el = document.getElementById('tabela-contatos');
+  if (!rows.length) { el.innerHTML = '<div class="empty">Nenhum contato</div>'; return; }
+  el.innerHTML = '<table><thead><tr><th>Nome</th><th>Telefone</th><th>Cadastrado em</th><th></th></tr></thead><tbody>' +
+    rows.map(c => '<tr><td>' + c.nome + '</td><td>' + c.telefone + '</td><td>' +
+      new Date(c.created_at).toLocaleString('pt-BR') + '</td><td>' +
+      '<button class="btn btn-danger" onclick="deletarContato(' + c.id + ')">X</button></td></tr>'
+    ).join('') + '</tbody></table>';
+}
+
+async function importarCSV() {
+  const file = document.getElementById('csv-file').files[0];
+  if (!file) { toast('Selecione um arquivo CSV', false); return; }
+  const fd = new FormData();
+  fd.append('arquivo', file);
+  const res = await fetch('/api/contatos/importar', { method: 'POST', body: fd });
+  const data = await res.json();
+  if (data.sucesso) { toast(data.importados + ' importados, ' + data.ignorados + ' ignorados'); carregarContatos(); }
+  else toast(data.erro, false);
+}
+
+async function deletarContato(id) {
+  if (!confirm('Remover contato?')) return;
+  await api('/contatos/' + id, { method: 'DELETE' });
+  carregarContatos();
+}
+
+// CAMPANHAS
+async function criarCampanha() {
+  const body = {
+    nome: document.getElementById('c-nome').value,
+    mensagem: document.getElementById('c-msg').value,
+    delay_min: +document.getElementById('c-dmin').value,
+    delay_max: +document.getElementById('c-dmax').value,
+  };
+  if (!body.nome || !body.mensagem) { toast('Preencha nome e mensagem', false); return; }
+  const r = await api('/campanhas', { method: 'POST', body: JSON.stringify(body) });
+  if (r.sucesso) { toast('Campanha criada!'); carregarCampanhas(); }
+  else toast(r.erro, false);
+}
+
+async function dispararCampanha(id) {
+  if (!confirm('Disparar para todos os contatos?')) return;
+  const r = await api('/campanhas/' + id + '/disparar', { method: 'POST' });
+  if (r.sucesso) toast(r.agendados + ' mensagens agendadas');
+  else toast(r.erro, false);
+  carregarCampanhas();
+}
+
+async function carregarCampanhas() {
+  const rows = await api('/campanhas');
+  const el = document.getElementById('lista-campanhas');
+  if (!rows.length) { el.innerHTML = '<div class="empty">Nenhuma campanha</div>'; return; }
+  el.innerHTML = '<table><thead><tr><th>Nome</th><th>Delay</th><th>Status</th><th>Criada em</th><th></th></tr></thead><tbody>' +
+    rows.map(c => '<tr><td>' + c.nome + '</td><td>' + c.delay_min + '-' + c.delay_max + 's</td><td>' +
+      '<span class="badge ' + (c.status === 'disparando' ? 'badge-yellow' : c.status === 'rascunho' ? 'badge-gray' : 'badge-green') + '">' + c.status + '</span></td><td>' +
+      new Date(c.created_at).toLocaleString('pt-BR') + '</td><td>' +
+      '<button class="btn btn-primary btn-sm" onclick="dispararCampanha(' + c.id + ')">Disparar</button></td></tr>'
+    ).join('') + '</tbody></table>';
+}
+
+// FLUXOS
+function addEtapa() {
+  etapaCount++;
+  const c = document.getElementById('etapas-container');
+  const div = document.createElement('div');
+  div.className = 'etapa-row';
+  div.innerHTML =
+    '<div class="etapa-num">' + etapaCount + '</div>' +
+    '<div style="flex:1">' +
+      '<textarea class="etapa-msg" placeholder="Mensagem da etapa ' + etapaCount + '"></textarea>' +
+      '<input type="number" class="etapa-delay" placeholder="Delay em segundos (0 = imediato)" value="' + (etapaCount === 1 ? 0 : 120) + '" min="0" style="margin-top:4px">' +
+    '</div>' +
+    '<button class="btn btn-danger btn-sm" onclick="this.parentElement.remove()" style="margin-top:8px">X</button>';
+  c.appendChild(div);
+}
+
+async function criarFluxo() {
+  const nome = document.getElementById('f-nome').value;
+  if (!nome) { toast('Informe o nome do fluxo', false); return; }
+  const etapas = [...document.querySelectorAll('.etapa-row')].map(row => ({
+    mensagem: row.querySelector('.etapa-msg').value,
+    delay_segundos: +row.querySelector('.etapa-delay').value,
+  })).filter(e => e.mensagem.trim());
+  if (!etapas.length) { toast('Adicione ao menos uma etapa', false); return; }
+  const r = await api('/fluxos', { method: 'POST', body: JSON.stringify({ nome, etapas }) });
+  if (r.sucesso) {
+    toast('Fluxo criado!');
+    document.getElementById('f-nome').value = '';
+    document.getElementById('etapas-container').innerHTML = '';
+    etapaCount = 0;
+    addEtapa();
+    carregarFluxos();
+  } else toast(r.erro, false);
+}
+
+async function adicionarListaAoFluxo(id) {
+  if (!confirm('Adicionar todos os contatos a este fluxo?')) return;
+  const r = await api('/fluxos/' + id + '/adicionar-lista', { method: 'POST' });
+  if (r.sucesso) toast(r.adicionados + ' contatos adicionados');
+  else toast(r.erro, false);
+}
+
+async function carregarFluxos() {
+  const rows = await api('/fluxos');
+  const el = document.getElementById('lista-fluxos');
+  if (!rows.length) { el.innerHTML = '<div class="empty">Nenhum fluxo</div>'; return; }
+  let html = '';
+  for (const f of rows) {
+    const det = await api('/fluxos/' + f.id);
+    const execs = await api('/fluxos/' + f.id + '/execucoes');
+    const ativos = execs.filter(e => e.status === 'ativo').length;
+    const concluidos = execs.filter(e => e.status === 'concluido').length;
+    html += '<div style="border:1px solid #e4e4e7;border-radius:8px;padding:14px;margin-bottom:10px">' +
+      '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">' +
+        '<strong>' + f.nome + '</strong>' +
+        '<span class="badge badge-blue">' + det.etapas.length + ' etapas</span>' +
+        '<span class="badge badge-yellow">' + ativos + ' ativos</span>' +
+        '<span class="badge badge-green">' + concluidos + ' concluidos</span>' +
+        '<button class="btn btn-primary btn-sm" style="margin-left:auto" onclick="adicionarListaAoFluxo(' + f.id + ')">+ Adicionar lista</button>' +
+      '</div>' +
+      '<table><thead><tr><th>#</th><th>Mensagem</th><th>Delay</th></tr></thead><tbody>' +
+      det.etapas.map((e, i) => '<tr><td>' + (i+1) + '</td><td>' + e.mensagem.substring(0, 80) + '</td><td>' + (e.delay_segundos === 0 ? 'Imediato' : e.delay_segundos + 's') + '</td></tr>').join('') +
+      '</tbody></table></div>';
+  }
+  el.innerHTML = html;
+}
+
+// FILA
+async function carregarFila() {
+  const camps = await api('/campanhas');
+  const el = document.getElementById('tabela-fila');
+  if (!camps.length) { el.innerHTML = '<div class="empty">Nenhuma campanha criada</div>'; return; }
+  let html = '';
+  for (const c of camps) {
+    const stats = await api('/campanhas/' + c.id + '/stats');
+    const total = stats.reduce((a, s) => a + s.total, 0);
+    if (!total) continue;
+    html += '<div style="margin-bottom:16px"><strong>' + c.nome + '</strong> — ' + total + ' mensagens' +
+      '<div style="display:flex;gap:6px;margin-top:6px">' +
+      stats.map(s => '<span class="badge ' + ({enviado:'badge-green',pendente:'badge-yellow',falhou:'badge-red'}[s.status]||'badge-gray') + '">' + s.status + ': ' + s.total + '</span>').join('') +
+      '</div></div>';
+  }
+  el.innerHTML = html || '<div class="empty">Nenhum item na fila</div>';
+}
+
+carregarContatos();
+addEtapa();
+setInterval(() => {
+  if (document.getElementById('page-fila').classList.contains('active')) carregarFila();
+}, 10000);
+</script>
+</body>
+</html>

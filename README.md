@@ -19,7 +19,7 @@ Sistema web para gerenciamento de contatos e envio automático de mensagens via 
 ### Instalação
 
 ```bash
-git clone <url-do-repositorio>
+git clone https://github.com/devraphaeldiniz/whatsapp-disparador.git
 cd whatsapp-disparador
 npm install
 ```

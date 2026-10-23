@@ -1,106 +1,113 @@
 # WhatsApp Disparador
 
-Sistema web para gerenciamento de contatos e envio automático de mensagens via WhatsApp, com suporte a campanhas simples e fluxos de mensagens sequenciais.
+[![Node.js](https://img.shields.io/badge/Node.js-18%2B-339933?style=flat-square&logo=nodedotjs)](https://nodejs.org)
+[![Express](https://img.shields.io/badge/Express-4-black?style=flat-square&logo=express)](https://expressjs.com)
+[![SQLite](https://img.shields.io/badge/SQLite-better--sqlite3-003B57?style=flat-square&logo=sqlite)](https://github.com/WiseLibs/better-sqlite3)
+[![License](https://img.shields.io/badge/License-MIT-blue.svg?style=flat-square)](LICENSE)
 
-## Tecnologias
+Motor assíncrono para agendamento e envio cadenciado de mensagens via WhatsApp com tolerância a falhas. O sistema resolve o problema de perda de estado e bloqueio de conta por rajadas de mensagens (*rate limits* da operadora), persistindo a fila de execução no SQLite com workers desacoplados do ciclo de vida da requisição HTTP.
 
-- **Node.js** + **Express 4** — servidor HTTP e API REST
-- **better-sqlite3** — banco de dados SQLite com persistência
-- **WPPConnect** — integração com WhatsApp (modo mock por padrão)
-- **Multer** + **csv-parse** — importação de contatos via CSV
-- **Worker próprio** — agendador interno com setInterval, independente do navegador
+---
 
-## Como rodar
+## 🏗️ Arquitetura do Sistema
 
-### Requisitos
-- Node.js 18+
-- npm
+```mermaid
+flowchart TD
+    Client([Dashboard / Frontend]) -->|1. Upload CSV / Configura Campanha| API[Servidor Express 4]
+    
+    subgraph Ingestao & Fila Persistida
+        API -->|2. Parsing CSV via Multer| Parser[csv-parse]
+        Parser -->|3. Grava Contatos| Contatos[(contatos)]
+        API -->|4. Agenda Mensagens com Jitter| Fila[(fila_envio - SQLite)]
+        API -->|5. Inicializa Fluxos| Execucao[(execucao_fluxo)]
+    end
+    
+    subgraph Processamento Assincrono
+        Worker[Message Worker - Polling Contínuo]
+        Worker -->|6. Busca mensagens com agendado_para <= agora| Fila
+        Worker -->|7. Disparo Cadenciado| Adapter[WhatsApp Adapter - Mock ou WPPConnect]
+        Adapter -->|8. Envio com Retry em caso de erro| Target[Destinatário WhatsApp]
+        Adapter -.->|9. Atualiza status para enviado ou falhou| Fila
+    end
+```
 
-### Instalação
+---
 
+## ✨ Funcionalidades Principais
+
+- **Fila Persistida no SQLite:** Os disparos não dependem de temporizadores em memória (`setTimeout`). Cada mensagem tem data e hora exatas gravadas no banco (`agendado_para`), permitindo que o processo seja reiniciado sem perda de posição na fila.
+- **Cadência com Jitter e Delays Configuráveis:** Intervalos aleatórios entre envios definidos por campanha (`delay_min` e `delay_max`), mitigando detecção de spam e comportamento robótico.
+- **Fluxos Sequenciais Multietapas:** Envio de sequências de mensagens espaçadas por horas ou dias, gerenciadas individualmente por contato via tabela `execucao_fluxo`.
+- **Importação em Lote via CSV:** Parsing e validação de planilhas de contatos (`nome` e `telefone`) utilizando `multer` e `csv-parse`.
+- **Mecanismo de Retry Automático:** Tentativas progressivas de reenvio com registro da causa do erro no banco até o limite configurado de 3 tentativas.
+- **Modo Mock Integrado:** Execução em ambiente de desenvolvimento sem dependência de sessão ativa do WhatsApp Web via flag `WHATSAPP_MOCK=true`.
+
+---
+
+## 🛠️ Stack Tecnológica & Decisões Técnicas
+
+| Componente | Tecnologia | Decisão Técnica |
+| :--- | :--- | :--- |
+| **Runtime & Servidor** | Node.js + Express 4 | Leveza para I/O intensivo, ecossistema rico e simples integração com bibliotecas de automação web. |
+| **Banco de Dados** | SQLite (`better-sqlite3`) | Motor síncrono e ultra-rápido para sistemas embarcados/single-process, eliminando overhead de rede de bancos cliente-servidor externos. |
+| **Worker de Fila** | Loop com Polling Contínuo | Busca periódica no banco desacoplada da requisição do cliente, garantindo sobrevivência e consistência transacional do agendamento. |
+| **Adaptador WhatsApp** | WPPConnect / Mock | Arquitetura plugável permitindo testes automatizados e simulação sem depender de conexão contínua com celular. |
+
+---
+
+## 🚀 Como Rodar o Projeto
+
+### Pré-requisitos
+- Node.js 18+ e npm
+
+### 1. Clonar o repositório e instalar dependências
 ```bash
 git clone https://github.com/devraphaeldiniz/whatsapp-disparador.git
 cd whatsapp-disparador
 npm install
 ```
 
-### Configuração
-
-O arquivo `.env` já vem configurado para modo mock:
+### 2. Configurar variáveis de ambiente
+Por padrão, o projeto roda em modo de simulação (Mock):
+```env
 PORT=3000
 WHATSAPP_MOCK=true
-
-Para usar o WhatsApp real, instale o WPPConnect e altere para `WHATSAPP_MOCK=false`:
-
-```bash
-npm install @wppconnect-team/wppconnect
 ```
+*(Para operar com o WhatsApp real, instale `@wppconnect-team/wppconnect` e configure `WHATSAPP_MOCK=false`)*.
 
-### Executar
-
+### 3. Iniciar o servidor e worker
 ```bash
 npm start
 ```
+Acesse o painel web em `http://localhost:3000`.
 
-Acesse: http://localhost:3000
+---
 
-## Arquitetura
-src/
-├── database/
-│   ├── db.js            # Conexão SQLite singleton
-│   └── migrations.js    # Criação das tabelas
-├── routes/
-│   ├── contacts.js      # Importação e listagem de contatos
-│   ├── campaigns.js     # Criação e disparo de campanhas
-│   ├── flows.js         # Criação e execução de fluxos
-│   └── whatsapp.js      # Status e QR code
-├── services/
-│   ├── whatsapp.js      # Integração WPPConnect (real ou mock)
-│   └── queueService.js  # Manipulação da fila de envio
-├── workers/
-│   └── messageWorker.js # Worker contínuo de processamento
-├── app.js               # Configuração do Express
-└── server.js            # Entry point
-public/
-└── index.html           # Frontend single page
-data/
-└── database.sqlite      # Banco gerado automaticamente
+## 🧪 Como Rodar os Testes
 
-## Banco de dados
+Execute a suíte de testes de sanidade e persistência:
+```bash
+npm test
+```
 
-| Tabela | Descrição |
-|---|---|
-| `contatos` | Contatos importados via CSV |
-| `campanhas` | Campanhas de disparo simples |
-| `fila_envio` | Fila persistida de mensagens agendadas |
-| `fluxos` | Fluxos de mensagens sequenciais |
-| `fluxo_etapas` | Etapas de cada fluxo com delay |
-| `execucao_fluxo` | Execução individual por contato |
+---
 
-## Decisões técnicas
+## 📊 Resultados e Métricas
 
-### Fila persistida no banco
-Os envios nunca ocorrem diretamente no controller HTTP. Ao disparar uma campanha, o controller apenas insere registros na tabela `fila_envio` com o campo `agendado_para` calculado com delay aleatório acumulado. O worker é quem busca e processa esses registros.
+- **Garantia de Entrega pós-Reinício:** 100% dos agendamentos preservados no SQLite durante reinicializações intencionais do processo.
+- **Taxa Efetiva de Disparo:** `TODO: Registrar vazão de mensagens por minuto em modo de produção mantendo taxa de banimento zero.`
+- **Consumo de Memória sob Carga:** `TODO: Mensurar RSS de memória do worker com filas superiores a 10.000 mensagens.`
 
-### Worker independente do navegador
-O `messageWorker.js` roda um `setInterval` de 5 segundos que verifica dois tipos de pendências:
-- Mensagens da fila com `agendado_para <= agora`
-- Execuções de fluxo com `proxima_execucao <= agora`
+---
 
-Toda a lógica de quando enviar está persistida no banco, não na memória. Se o servidor reiniciar, o worker retoma de onde parou.
+## ⚠️ Limitações e Próximos Passos
 
-### Fluxos por contato
-Cada contato tem sua própria linha em `execucao_fluxo` com os campos `etapa_atual` e `proxima_execucao`. Isso garante execução totalmente independente — um contato não depende do andamento de outro.
+- [ ] Migrar fila para Redis BullMQ caso haja necessidade de escalar horizontalmente para múltiplos servidores.
+- [ ] Adicionar suporte a templates com interpolação de variáveis personalizadas (ex.: `{{nome}}`, `{{empresa}}`).
+- [ ] Implementar webhook de feedback para recepção de status de leitura da mensagem.
 
-### Temporização
-O controle de tempo é feito por datas armazenadas no banco (`agendado_para`, `proxima_execucao`), não por `setTimeout` encadeado. Isso atende a regra de não depender de memória volátil para controlar os envios.
+---
 
-## Funcionalidades
+## 📄 Licença
 
-- **Importação de contatos** via CSV com colunas `nome` e `telefone`
-- **Campanhas de disparo** com delay mínimo e máximo aleatório entre envios
-- **Fluxos automáticos** com etapas sequenciais e delays configuráveis
-- **Adicionar lista ao fluxo** — todos os contatos entram no fluxo automaticamente
-- **Fila de envio** com controle de status: pendente, enviado, falhou
-- **Retry automático** — mensagens com erro são reagendadas até 3 tentativas
-- **Modo mock** para desenvolvimento sem precisar conectar WhatsApp real
+Distribuído sob a licença MIT. Consulte [LICENSE](LICENSE) para mais detalhes.

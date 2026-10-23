@@ -1,0 +1,4 @@
+# Linguist overrides
+# Ignora arquivos estáticos de frontend para refletir a linguagem real de backend (Node.js/JavaScript)
+public/* linguist-vendored
+public/index.html linguist-vendored

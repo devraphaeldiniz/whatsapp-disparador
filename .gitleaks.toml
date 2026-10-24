@@ -1,0 +1,4 @@
+title = "Gitleaks config for whatsapp-disparador"
+
+[allowlist]
+description = "Nenhum padrão de allowlist necessário no momento"

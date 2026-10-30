@@ -95,13 +95,13 @@ npm test
 ## 📊 Resultados e Métricas
 
 - **Garantia de Entrega pós-Reinício:** 100% dos agendamentos preservados no SQLite durante reinicializações intencionais do processo.
-- **Taxa Efetiva de Disparo:** `TODO: Registrar vazão de mensagens por minuto em modo de produção mantendo taxa de banimento zero.`
-- **Consumo de Memória sob Carga:** `TODO: Mensurar RSS de memória do worker com filas superiores a 10.000 mensagens.`
 
 ---
 
 ## ⚠️ Limitações e Próximos Passos
 
+- [ ] Registrar a vazão de mensagens por minuto em produção, sem banimentos.
+- [ ] Medir o consumo de memória do worker com filas acima de 10.000 mensagens.
 - [ ] Migrar fila para Redis BullMQ caso haja necessidade de escalar horizontalmente para múltiplos servidores.
 - [ ] Adicionar suporte a templates com interpolação de variáveis personalizadas (ex.: `{{nome}}`, `{{empresa}}`).
 - [ ] Implementar webhook de feedback para recepção de status de leitura da mensagem.
